@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"math/rand"
@@ -13,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -825,11 +827,24 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 }
 
 func main() {
+
 	// Check for environment variable override for data directory
 	if envDir := os.Getenv("DATA_DIR"); envDir != "" {
 		dataDir = envDir
 	}
 	fmt.Printf("Using data directory: %s\n", dataDir)
+  
+	// Add REST API flag (default: true)
+	enableREST := flag.Bool("rest", true, "Enable REST API server")
+	flag.Parse()
+
+	// Get REST API port from environment variable, default to 9533
+	restPort := 9533
+	if portStr := os.Getenv("WHATSAPP_BRIDGE_REST_PORT"); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil {
+			restPort = port
+		}
+	}
 
 	// Set up logger
 	logger := waLog.Stdout("Client", "INFO", true)
@@ -922,9 +937,11 @@ func main() {
 			}
 		}
 	})
-
-	// Start REST API server - still needed for sending/downloading after connection
-	startRESTServer(client, messageStore, 8080)
+  
+  // Start REST API server if enabled
+	if *enableREST {
+		startRESTServer(client, messageStore, restPort)
+	}
 
 	// Main control loop goroutine
 	go func() {
@@ -983,7 +1000,7 @@ func main() {
 			}
 		}
 	}()
-
+	
 	// Create a channel to keep the main goroutine alive
 	exitChan := make(chan os.Signal, 1)
 	signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)

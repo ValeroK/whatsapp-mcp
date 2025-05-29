@@ -1,0 +1,13 @@
+digraph G {
+	rankdir=TB
+	"Claude/LLM"
+	"Python MCP Server"
+	"Go WhatsApp Bridge"
+	SQLite
+	"WhatsApp Web API"
+	"Claude/LLM" -> "Python MCP Server"
+	"Python MCP Server" -> "Go WhatsApp Bridge"
+	"Python MCP Server" -> SQLite
+	"Go WhatsApp Bridge" -> "WhatsApp Web API"
+	"Go WhatsApp Bridge" -> SQLite
+}
