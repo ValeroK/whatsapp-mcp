@@ -16,9 +16,11 @@ from whatsapp import (
     send_file as whatsapp_send_file,
     send_audio_message as whatsapp_audio_voice_message,
     download_media as whatsapp_download_media,
+    get_unread_messages as whatsapp_get_unread_messages
     get_control_state as whatsapp_get_control_state,
     set_control_state as whatsapp_set_control_state
 )
+
 import os
 import urllib.parse
 
@@ -288,6 +290,19 @@ def download_media(message_id: str, chat_jid: str) -> Dict[str, Any]:
             "message": "Failed to download media"
         }
 
+@mcp.tool()
+def get_unread_messages(limit: int = 10) -> List[Dict[str, Any]]:
+    """Get an overview of recent chats with unread messages.
+    
+    Args:
+        limit: Maximum number of chats with unread messages to return (default 10)
+    
+    Returns:
+        A list of chat objects with unread message information
+    """
+    unread_chats = whatsapp_get_unread_messages(limit)
+    return unread_chats
+  
 @mcp.tool()
 def connect_whatsapp() -> Dict[str, Any]:
     """Initiate the WhatsApp connection process. 
