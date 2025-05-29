@@ -109,14 +109,83 @@ Without this setup, you'll likely run into errors like:
 This application consists of two main components:
 
 1. **Go WhatsApp Bridge** (`whatsapp-bridge/`): A Go application that connects to WhatsApp's web API, handles authentication via QR code, and stores message history in SQLite. It serves as the bridge between WhatsApp and the MCP server.
-
 2. **Python MCP Server** (`whatsapp-mcp-server/`): A Python server implementing the Model Context Protocol (MCP), which provides standardized tools for Claude to interact with WhatsApp data and send/receive messages.
 
-### Data Storage
+### Architecture Diagram
 
-- All message history is stored in a SQLite database within the `whatsapp-bridge/store/` directory
-- The database maintains tables for chats and messages
-- Messages are indexed for efficient searching and retrieval
+![Architecture Diagram](./architecture.png)
+
+```
+Claude/LLM
+   │
+   ▼
+Python MCP Server (whatsapp-mcp-server/)
+   │         │
+   │         └───► SQLite (messages, chats, media)
+   │
+   ▼
+Go WhatsApp Bridge (whatsapp-bridge/)
+   │
+   ▼
+WhatsApp Web API
+```
+
+## API Usage Examples
+
+### Send a WhatsApp Message
+
+```python
+from mcp.client import MCPClient
+
+client = MCPClient("http://localhost:YOUR_MCP_PORT")
+result = client.send_message(recipient="123456789@s.whatsapp.net", message="Hello from MCP!")
+print(result)
+```
+
+### List Messages from a Chat
+
+```python
+messages = client.list_messages(chat_jid="123456789@g.us", limit=10)
+for msg in messages:
+    print(msg)
+```
+
+## Developer Onboarding
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/lharries/whatsapp-mcp.git
+   cd whatsapp-mcp
+   ```
+2. **Install prerequisites:**
+   - Go (latest stable)
+   - Python 3.6+
+   - UV (Python package manager):  
+     `curl -LsSf https://astral.sh/uv/install.sh | sh`
+   - FFmpeg (for audio support)
+   - (Windows only) C compiler and enable CGO
+3. **Run the Go WhatsApp bridge:**
+   ```bash
+   cd whatsapp-bridge
+   go run main.go
+   ```
+   - Scan the QR code with your WhatsApp app.
+4. **Run the Python MCP server:**
+   ```bash
+   cd ../whatsapp-mcp-server
+   uv venv
+   uv pip install -r requirements.txt
+   python main.py
+   ```
+5. **Configure Claude Desktop or Cursor as described in the README.**
+
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for release history.
+
+## Roadmap
+
+See [roadmap.md](./roadmap.md) for planned features and improvements.
 
 ## Usage
 
@@ -179,3 +248,65 @@ By default, just the metadata of the media is stored in the local database. The 
 - **WhatsApp Out of Sync**: If your WhatsApp messages get out of sync with the bridge, delete both database files (`whatsapp-bridge/store/messages.db` and `whatsapp-bridge/store/whatsapp.db`) and restart the bridge to re-authenticate.
 
 For additional Claude Desktop integration troubleshooting, see the [MCP documentation](https://modelcontextprotocol.io/quickstart/server#claude-for-desktop-integration-issues). The documentation includes helpful tips for checking logs and resolving common issues.
+
+## Database Schema (UML)
+
+Below is a UML diagram of the SQLite data structure used by the WhatsApp bridge:
+
+```plantuml
+@startuml
+entity chats {
+  *jid : TEXT <<PK>>
+  name : TEXT
+  last_message_time : TIMESTAMP
+}
+
+entity messages {
+  *id : TEXT
+  *chat_jid : TEXT <<FK>>
+  sender : TEXT
+  content : TEXT
+  timestamp : TIMESTAMP
+  is_from_me : BOOLEAN
+  media_type : TEXT
+  filename : TEXT
+  url : TEXT
+  media_key : BLOB
+  file_sha256 : BLOB
+  file_enc_sha256 : BLOB
+  file_length : INTEGER
+}
+
+chats ||--o{ messages : contains
+@enduml
+```
+
+This diagram shows the relationship between the `chats` and `messages` tables, including primary and foreign keys.
+
+## Running the WhatsApp Bridge (Go)
+
+By default, the WhatsApp bridge starts with its REST API enabled. This REST API is used by the MCP server to send messages and download media.
+
+- **REST API is enabled by default.**
+- **Port:** The REST API listens on port `9533` by default. You can change this by setting the `WHATSAPP_BRIDGE_REST_PORT` environment variable.
+
+### Usage Examples
+
+- **Start with REST API (default):**
+  ```bash
+  go run main.go
+  # REST API will be available on port 9533
+  ```
+
+- **Change the REST API port:**
+  ```bash
+  export WHATSAPP_BRIDGE_REST_PORT=9000
+  go run main.go
+  # REST API will be available on port 9000
+  ```
+
+- **Disable the REST API:**
+  ```bash
+  go run main.go --rest=false
+  # REST API will NOT be started
+  ```
