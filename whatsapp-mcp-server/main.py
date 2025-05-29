@@ -16,7 +16,7 @@ from whatsapp import (
     send_file as whatsapp_send_file,
     send_audio_message as whatsapp_audio_voice_message,
     download_media as whatsapp_download_media,
-    get_unread_messages as whatsapp_get_unread_messages
+    get_unread_messages as whatsapp_get_unread_messages,
     get_control_state as whatsapp_get_control_state,
     set_control_state as whatsapp_set_control_state
 )
@@ -436,5 +436,6 @@ def disconnect_whatsapp() -> Dict[str, Any]:
         }
 
 if __name__ == "__main__":
+    
     # Initialize and run the server
     mcp.run(transport='stdio')

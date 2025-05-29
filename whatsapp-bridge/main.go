@@ -20,6 +20,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/mdp/qrterminal"
 
 	"bytes"
 
@@ -194,7 +195,6 @@ func (store *MessageStore) GetChats() ([]Chat, error) {
 	return chats, nil
 }
 
-
 // Get unread count for a chat
 func (store *MessageStore) GetUnreadCount(chatJID string) (uint32, error) {
 	var unreadCount uint32
@@ -217,6 +217,8 @@ func (store *MessageStore) MarkChatAsUnread(chatJID string) error {
 	// Set unread count to 1 to indicate unread status
 	_, err := store.db.Exec("UPDATE chats SET unread_count = 1 WHERE jid = ?", chatJID)
 	fmt.Printf("MarkChatAsUnread: Marking chat %s as unread\n", chatJID)
+	return err
+}
 
 // Get a value from the control_state table
 func (store *MessageStore) GetControlState(key string) (string, error) {
@@ -872,7 +874,6 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 		})
 	})
 
-
 	// Handler for getting all chats with unread counts
 	http.HandleFunc("/api/chats", func(w http.ResponseWriter, r *http.Request) {
 		// Only allow GET requests
@@ -954,6 +955,8 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 		json.NewEncoder(w).Encode(MarkChatReadResponse{
 			Success: true,
 			Message: actionMsg,
+		})
+	})
 
 	// Add a health check endpoint
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -983,7 +986,7 @@ func main() {
 		dataDir = envDir
 	}
 	fmt.Printf("Using data directory: %s\n", dataDir)
-  
+
 	// Add REST API flag (default: true)
 	enableREST := flag.Bool("rest", true, "Enable REST API server")
 	flag.Parse()
@@ -1059,6 +1062,11 @@ func main() {
 		logger.Warnf("Failed to initialize qr_code state: %v", err)
 	}
 
+	// Start REST API server if enabled - MOVED HERE to start immediately
+	if *enableREST {
+		startRESTServer(client, messageStore, restPort)
+	}
+
 	// Setup event handling for messages and history sync
 	client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
@@ -1111,19 +1119,17 @@ func main() {
 				fmt.Println("\nScan this QR code with your WhatsApp app:")
 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
 			} else if evt.Event == "success" {
+				// Update status in database
+				err := messageStore.SetControlState("connection_status", "connected")
+				if err != nil {
+					logger.Warnf("Failed to update connection status: %v", err)
+					break
+				}
+				logger.Infof("Connected to WhatsApp")
 				connected <- true
 				break
-			// Update status in database
-			err := messageStore.SetControlState("connection_status", "disconnected")
-			if err != nil {
-				logger.Warnf("Failed to update connection status: %v", err)
 			}
 		}
-	})
-  
-  // Start REST API server if enabled
-	if *enableREST {
-		startRESTServer(client, messageStore, restPort)
 	}
 
 	// Main control loop goroutine
@@ -1183,7 +1189,7 @@ func main() {
 			}
 		}
 	}()
-	
+
 	// Create a channel to keep the main goroutine alive
 	exitChan := make(chan os.Signal, 1)
 	signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
@@ -1777,6 +1783,7 @@ func (store *MessageStore) AreMessagesIncoming(messageIDs []string, chatJID stri
 
 	// If count > 0, at least one message is incoming
 	return count > 0, nil
+}
 
 // Function to handle the WhatsApp connection process
 func connectToWhatsApp(client *whatsmeow.Client, messageStore *MessageStore, logger waLog.Logger) {

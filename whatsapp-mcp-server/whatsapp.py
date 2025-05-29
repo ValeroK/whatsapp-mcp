@@ -10,7 +10,7 @@ import audio
 # Updated path to use the container's volume path
 MESSAGES_DB_PATH = "/data/store/messages.db"
 # Ensure API points to the internal container address rather than localhost
-WHATSAPP_API_BASE_URL = "http://0.0.0.0:8080/api"
+WHATSAPP_API_BASE_URL = "http://0.0.0.0:9533/api"
 
 @dataclass
 class Message:
@@ -856,3 +856,48 @@ def format_message_for_api(message: Message) -> Dict:
 # after collecting Message objects, return:
 # messages = [format_message_for_api(msg) for msg in result]
 # return messages
+
+def get_unread_messages(limit: int = 10) -> List[Dict]:
+    """Get unread messages from all chats.
+    
+    Args:
+        limit: Maximum number of messages to return (default 10)
+    """
+    try:
+        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get messages from chats with unread count > 0
+        cursor.execute("""
+            SELECT m.timestamp, m.sender, c.name, m.content, m.is_from_me, c.jid, m.id, m.media_type
+            FROM messages m
+            JOIN chats c ON m.chat_jid = c.jid
+            WHERE c.unread_count > 0
+            ORDER BY m.timestamp DESC
+            LIMIT ?
+        """, (limit,))
+        
+        messages = cursor.fetchall()
+        
+        result = []
+        for msg in messages:
+            message = Message(
+                timestamp=datetime.fromisoformat(msg[0]),
+                sender=msg[1],
+                chat_name=msg[2],
+                content=msg[3],
+                is_from_me=msg[4],
+                chat_jid=msg[5],
+                id=msg[6],
+                media_type=msg[7]
+            )
+            result.append(format_message_for_api(message))
+        
+        return result
+        
+    except sqlite3.Error as e:
+        print(f"Database error while getting unread messages: {e}")
+        return []
+    finally:
+        if 'conn' in locals():
+            conn.close()
