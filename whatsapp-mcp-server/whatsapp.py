@@ -205,14 +205,11 @@ def list_messages(
             result.append(message)
             
         if include_context and result:
-            messages_with_context = []
+            contexts = []
             for msg in result:
                 context = get_message_context(msg.id, context_before, context_after)
-                messages_with_context.extend(context.before)
-                messages_with_context.append(context.message)
-                messages_with_context.extend(context.after)
-            
-            return [format_message_for_api(m) for m in messages_with_context]
+                contexts.append(context)  # context is already formatted
+            return contexts
             
         return [format_message_for_api(m) for m in result]    
         

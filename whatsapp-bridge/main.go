@@ -1863,8 +1863,14 @@ func connectToWhatsApp(client *whatsmeow.Client, messageStore *MessageStore, log
 			return
 		}
 
-		// Attempt to sync history after successful connection
-		requestHistorySync(client)
+		// Attempt to sync history after successful connection, with retry
+		go func() {
+			for i := 0; i < 5; i++ {
+				fmt.Printf("Attempting history sync (try %d/5)...\n", i+1)
+				requestHistorySync(client)
+				time.Sleep(2 * time.Second)
+			}
+		}()
 	} else {
 		// Already have a session, just connect
 		err := client.Connect()
@@ -1883,8 +1889,14 @@ func connectToWhatsApp(client *whatsmeow.Client, messageStore *MessageStore, log
 			logger.Infof("Successfully connected with existing session!")
 			messageStore.SetControlState("connection_status", "connected")
 
-			// Attempt to sync history after successful connection
-			requestHistorySync(client)
+			// Attempt to sync history after successful connection, with retry
+			go func() {
+				for i := 0; i < 5; i++ {
+					fmt.Printf("Attempting history sync (try %d/5)...\n", i+1)
+					requestHistorySync(client)
+					time.Sleep(2 * time.Second)
+				}
+			}()
 		} else {
 			logger.Errorf("Failed to establish stable connection with existing session")
 			messageStore.SetControlState("connection_status", "error")
