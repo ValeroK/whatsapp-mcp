@@ -8,7 +8,7 @@ This guide explains how to import (apply) pull requests (PRs) from the main/orig
 If you haven't already, add the main/original repo as a remote:
 
 ```bash
-git remote add upstream https://github.com/ORIGINAL_OWNER/REPO_NAME.git
+git remote add upstream https://github.com/lharries/whatsapp-mcp.git
 git fetch upstream
 ```
 

@@ -62,14 +62,21 @@ COPY --from=builder-python /app/whatsapp-mcp-server /app/whatsapp-mcp-server
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh && chown appuser:appgroup /app/entrypoint.sh
 
+# Copy the public directory for static web assets
+COPY public /app/public
+
 # Ensure the app directory is owned by appuser
 RUN chown -R appuser:appgroup /app
 
 # Define the mount point for persistent data (SQLite DBs, downloaded media)
 VOLUME /data
 
+# Expose the web server port
+EXPOSE 8081
+
 # Switch to the non-root user
 USER appuser
 
 # Use Tini as the init system to handle signals properly
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
+# Start the static web server in the background, then run the main entrypoint
+ENTRYPOINT ["/usr/bin/tini", "--", "sh", "-c", "python3 -m http.server 8081 --directory /app/public > /app/http.log 2>&1 & exec /app/entrypoint.sh"]

@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 import os.path
 import requests
 import json
@@ -22,6 +22,7 @@ class Message:
     id: str
     chat_name: Optional[str] = None
     media_type: Optional[str] = None
+    group_name: Optional[str] = ""
 
 @dataclass
 class Chat:
@@ -134,7 +135,7 @@ def list_messages(
     include_context: bool = True,
     context_before: int = 1,
     context_after: int = 1
-) -> List[Message]:
+) -> List[Dict]:
     """Get messages matching the specified criteria with optional context."""
     try:
         conn = sqlite3.connect(MESSAGES_DB_PATH)
@@ -204,7 +205,6 @@ def list_messages(
             result.append(message)
             
         if include_context and result:
-            # Add context for each message
             messages_with_context = []
             for msg in result:
                 context = get_message_context(msg.id, context_before, context_after)
@@ -212,10 +212,9 @@ def list_messages(
                 messages_with_context.append(context.message)
                 messages_with_context.extend(context.after)
             
-            return format_messages_list(messages_with_context, show_chat_info=True)
+            return [format_message_for_api(m) for m in messages_with_context]
             
-        # Format and display messages without context
-        return format_messages_list(result, show_chat_info=True)    
+        return [format_message_for_api(m) for m in result]    
         
     except sqlite3.Error as e:
         print(f"Database error: {e}")
@@ -229,7 +228,7 @@ def get_message_context(
     message_id: str,
     before: int = 5,
     after: int = 5
-) -> MessageContext:
+) -> Dict:
     """Get context around a specific message."""
     try:
         conn = sqlite3.connect(MESSAGES_DB_PATH)
@@ -304,11 +303,11 @@ def get_message_context(
                 media_type=msg[7]
             ))
         
-        return MessageContext(
-            message=target_message,
-            before=before_messages,
-            after=after_messages
-        )
+        return {
+            "message": format_message_for_api(target_message),
+            "before": [format_message_for_api(m) for m in before_messages],
+            "after": [format_message_for_api(m) for m in after_messages]
+        }
         
     except sqlite3.Error as e:
         print(f"Database error: {e}")
@@ -485,7 +484,7 @@ def get_contact_chats(jid: str, limit: int = 20, page: int = 0) -> List[Chat]:
             conn.close()
 
 
-def get_last_interaction(jid: str) -> str:
+def get_last_interaction(jid: str) -> Optional[Dict]:
     """Get most recent message involving the contact."""
     try:
         conn = sqlite3.connect(MESSAGES_DB_PATH)
@@ -524,7 +523,7 @@ def get_last_interaction(jid: str) -> str:
             media_type=msg_data[7]
         )
         
-        return format_message(message)
+        return format_message_for_api(message)
         
     except sqlite3.Error as e:
         print(f"Database error: {e}")
@@ -823,3 +822,37 @@ def set_control_state(key: str, value: str) -> bool:
     finally:
         if 'conn' in locals():
             conn.close()
+
+# Helper to format message for API
+
+def format_message_for_api(message: Message) -> Dict:
+    is_group = message.chat_jid.endswith("@g.us")
+    group_name = message.chat_name if is_group else ""
+    if message.is_from_me:
+        sender = "Me"
+        if is_group:
+            to = group_name
+        else:
+            to = message.chat_name or message.chat_jid  # contact name or JID
+    else:
+        if is_group:
+            sender = get_sender_name(message.sender)
+            to = group_name
+        else:
+            sender = message.chat_name or message.sender  # contact name or JID
+            to = "Me"
+    return {
+        "timestamp": message.timestamp.isoformat(),
+        "from": sender,
+        "to": to,
+        "group_name": group_name,
+        "chat_jid": message.chat_jid,
+        "content": message.content,
+        "media_type": message.media_type,
+        "id": message.id
+    }
+
+# In all message-returning functions (e.g., list_messages, get_message_context, etc.),
+# after collecting Message objects, return:
+# messages = [format_message_for_api(msg) for msg in result]
+# return messages

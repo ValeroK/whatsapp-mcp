@@ -19,9 +19,13 @@ from whatsapp import (
     get_control_state as whatsapp_get_control_state,
     set_control_state as whatsapp_set_control_state
 )
+import os
+import urllib.parse
 
 # Initialize FastMCP server
 mcp = FastMCP("whatsapp")
+
+WHATSAPP_API_BASE_URL = os.getenv("WHATSAPP_API_BASE_URL", "http://localhost:9533/api")
 
 def check_bridge_health(max_attempts=30, delay=1):
     """Check if the WhatsApp bridge is up and healthy
@@ -37,7 +41,7 @@ def check_bridge_health(max_attempts=30, delay=1):
     for attempt in range(max_attempts):
         try:
             # Try to connect to the health endpoint
-            response = requests.get("http://localhost:8080/api/health", timeout=2)
+            response = requests.get(WHATSAPP_API_BASE_URL + "/health", timeout=2)
             if response.status_code == 200 and response.json().get("healthy", False):
                 print(f"WhatsApp bridge is healthy after {attempt+1} attempts")
                 return True
@@ -312,10 +316,12 @@ def connect_whatsapp() -> Dict[str, Any]:
         if status == "needs_qr":
             # QR code is available, return it
             qr_code = whatsapp_get_control_state("qr_code")
+            qr_url = f"/index.html?qr={urllib.parse.quote(qr_code)}"
             return {
                 "status": "needs_qr",
                 "message": "Please scan this QR code with your WhatsApp mobile app",
-                "qr_code": qr_code
+                "qr_code": qr_code,
+                "qr_url": qr_url
             }
         elif status == "connected":
             # Successfully connected
@@ -338,7 +344,7 @@ def connect_whatsapp() -> Dict[str, Any]:
         else:
             # Unexpected status
             attempt += 1
-            time.sleep(2)
+            time.sleep(5)
             continue
     
     # If we've reached here, the connection process timed out
